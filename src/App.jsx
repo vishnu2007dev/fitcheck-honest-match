@@ -429,7 +429,14 @@ export default function App() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ posting: form.posting, resume, profile: { graduation: `${form.gradMonth} ${form.gradYear}`, year: form.year, authorization: form.authorization, location: form.location } }),
       });
-      const data = await r.json().catch(() => ({ error: 'The server sent back something unexpected.' }));
+      const text = await r.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch {
+        if (r.status === 404) throw new Error('The matching API was not found (404). If you are running this on your own computer, use `npx vercel dev` instead of `npm run dev`, or open the deployed site.');
+        if (r.status === 504 || /timeout|timed out/i.test(text)) throw new Error('The AI model took longer than the server allows (timeout). Free models are sometimes slow. Try again, or see the sample result.');
+        throw new Error(`The server sent back something unexpected (HTTP ${r.status}): ${text.slice(0, 140)}`);
+      }
       if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
       // Re-verify on the client against the exact text sent.
       const result = processResult(data.result ? { ...data.result, requirements: data.result.requirements.map((x) => ({ ...x, level: x.claimed_level ?? x.level })) } : {}, form.posting, resume);
