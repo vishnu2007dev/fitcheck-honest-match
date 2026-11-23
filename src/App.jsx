@@ -198,7 +198,7 @@ function InputPanel({ form, setForm, onRun, onSample, busy }) {
 }
 
 function Loading({ seconds }) {
-  const active = Math.min(STEPS.length - 1, Math.floor(seconds / 4));
+  const active = Math.min(STEPS.length - 1, Math.floor(seconds / 8));
   return (
     <motion.section {...fade} className="glass panel loading" aria-live="polite">
       <div className="kicker">Running the protocol · {seconds}s</div>
@@ -210,7 +210,7 @@ function Loading({ seconds }) {
           </li>
         ))}
       </ol>
-      <p className="fine">Free models can take 20 to 60 seconds.</p>
+      <p className="fine">Free models can take up to two minutes. FitCheck tries a few models until one answers.</p>
     </motion.section>
   );
 }

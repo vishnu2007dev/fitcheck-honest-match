@@ -34,7 +34,8 @@ function limited(ip) {
 function buildUserMessage({ posting, resume, profile }) {
   const p = profile || {};
   return [
-    'Apply the Honest Match Protocol to the inputs below. Return JSON only.',
+    'Apply the Honest Match Protocol to the inputs below. Return JSON only, with no reasoning text.',
+    'Keep it compact so you answer fast: at most 10 requirements, notes under 20 words, gap actions under 35 words, 3 defend questions.',
     '',
     '=== CANDIDATE PROFILE (answers from the candidate) ===',
     `Expected graduation: ${p.graduation || 'not given'}`,
@@ -51,36 +52,45 @@ function buildUserMessage({ posting, resume, profile }) {
 }
 
 async function callModel(model, messages, key, referer, timeoutMs, noThinking = true) {
+  // OpenRouter sends headers right away and keeps the body open while the model writes,
+  // so the abort timer has to cover reading the body, not just the headers.
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  let r;
+  let status = 0, text = '';
   try {
-  r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    signal: ctrl.signal,
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': referer,
-      'X-Title': 'FitCheck Honest Match',
-    },
-    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 3500, ...(noThinking ? { reasoning: { enabled: false } } : {}) }),
-  });
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': referer,
+        'X-Title': 'FitCheck Honest Match',
+      },
+      body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 3000, ...(noThinking ? { reasoning: { enabled: false } } : {}) }),
+    });
+    status = r.status;
+    text = await r.text();
   } catch (e) {
-    const err = new Error(e.name === 'AbortError' ? 'The model took too long to answer' : `Could not reach OpenRouter: ${e.message}`);
+    const err = new Error(e.name === 'AbortError' ? `No answer within ${Math.round(timeoutMs / 1000)}s` : `Could not reach OpenRouter: ${e.message}`);
     err.status = e.name === 'AbortError' ? 504 : 502;
     throw err;
   } finally {
     clearTimeout(t);
   }
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    const msg = data?.error?.message || `HTTP ${r.status}`;
-    const err = new Error(msg);
-    err.status = r.status;
+  let data = {};
+  try { data = JSON.parse(text); } catch { /* keep empty */ }
+  if (status < 200 || status >= 300 || data?.error) {
+    const err = new Error(data?.error?.message || `HTTP ${status}`);
+    err.status = data?.error?.code && Number(data.error.code) ? Number(data.error.code) : status;
     throw err;
   }
   const content = data?.choices?.[0]?.message?.content;
+  if (!content || !String(content).trim()) {
+    const err = new Error('Empty model reply');
+    err.status = 204;
+    throw err;
+  }
   return { content, model: data?.model || model };
 }
 
@@ -93,8 +103,8 @@ export default async function handler(req, res) {
   }
 }
 
-// Vercel stops the function at 60 s; keep the whole run under this budget so we always answer with JSON.
-const BUDGET_MS = 52000;
+// Vercel stops the function at 120 s (vercel.json); keep the whole run under this budget so we always answer with JSON.
+const BUDGET_MS = 110000;
 
 async function run(req, res) {
   if (req.method === 'GET') {
@@ -132,7 +142,7 @@ async function run(req, res) {
     const left = BUDGET_MS - (Date.now() - started);
     if (left < 6000) break;
     // Give each model a slice so slower ones cannot use up the whole budget; the last one gets what is left.
-    const slice = i === order.length - 1 ? left : Math.min(left, 22000);
+    const slice = i === order.length - 1 ? left : Math.min(left, 35000);
     for (const noThinking of [true, false]) {
       try {
         const { content, model: used } = await callModel(model, messages, key, referer, slice, noThinking);
