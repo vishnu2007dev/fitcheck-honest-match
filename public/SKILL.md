@@ -57,6 +57,8 @@ For each requirement, find the strongest supporting line in the resume and assig
 | 1 | Mentioned | Only named, such as in a skills list, with no sign of use. |
 | 0 | None | No supporting line. `resume_quote` must be null. |
 
+Soft skills need fair, not literal, evidence: a group project, hackathon team, team competition, club role or shared research counts as evidence for teamwork or collaboration (usually level 2, or level 3 with a result), even if the resume never uses the word "team". Quote the line that shows it.
+
 Add a one-sentence `note` explaining the level.
 
 ## Step 4. Honest gap actions
