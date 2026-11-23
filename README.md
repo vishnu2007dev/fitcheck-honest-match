@@ -5,7 +5,7 @@ Paste a job posting and a resume. Get a fit score where every match and gap show
 ## How it is built
 
 - `public/SKILL.md` is the Honest Match Protocol: the reusable instruction set any AI agent can follow. It is served at `/SKILL.md` and is also the system prompt the backend sends.
-- `api/match.js` is a Vercel serverless function. It sends SKILL.md plus the posting, resume and profile to an OpenRouter model (default `openrouter/free`).
+- `api/match.js` is a Vercel serverless function. It sends SKILL.md plus the posting, resume and profile to an OpenRouter model (fast free models first, then the `openrouter/free` router as a fallback).
 - `lib/engine.js` is the scoring engine. It checks every quote against the real text (fake receipts score 0), then applies fixed weights. The browser runs the same check again.
 - `src/` is the React site (Vite + framer-motion).
 

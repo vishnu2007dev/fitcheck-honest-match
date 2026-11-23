@@ -11,7 +11,13 @@ function loadProtocol() {
   return PROTOCOL;
 }
 
-const DEFAULT_MODELS = ['openrouter/free'];
+// Fast, non-thinking free models first; the openrouter/free router (random free model) is the last resort.
+const DEFAULT_MODELS = [
+  'nvidia/nemotron-3.5-lightning:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'baidu/ernie-5.5-flash-preview:free',
+  'openrouter/free',
+];
 const MAX_POSTING = 15000;
 const MAX_RESUME = 10000;
 
@@ -44,7 +50,7 @@ function buildUserMessage({ posting, resume, profile }) {
   ].join('\n');
 }
 
-async function callModel(model, messages, key, referer, timeoutMs) {
+async function callModel(model, messages, key, referer, timeoutMs, noThinking = true) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   let r;
@@ -58,7 +64,7 @@ async function callModel(model, messages, key, referer, timeoutMs) {
       'HTTP-Referer': referer,
       'X-Title': 'FitCheck Honest Match',
     },
-    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 4000 }),
+    body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 3500, ...(noThinking ? { reasoning: { enabled: false } } : {}) }),
   });
   } catch (e) {
     const err = new Error(e.name === 'AbortError' ? 'The model took too long to answer' : `Could not reach OpenRouter: ${e.message}`);
@@ -121,12 +127,15 @@ async function run(req, res) {
   const started = Date.now();
   const errors = [];
 
-  for (const model of order) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const left = BUDGET_MS - (Date.now() - started);
-      if (left < 8000) break;
+  for (let i = 0; i < order.length; i++) {
+    const model = order[i];
+    const left = BUDGET_MS - (Date.now() - started);
+    if (left < 6000) break;
+    // Give each model a slice so slower ones cannot use up the whole budget; the last one gets what is left.
+    const slice = i === order.length - 1 ? left : Math.min(left, 22000);
+    for (const noThinking of [true, false]) {
       try {
-        const { content, model: used } = await callModel(model, messages, key, referer, left);
+        const { content, model: used } = await callModel(model, messages, key, referer, slice, noThinking);
         const raw = extractJson(content);
         const result = processResult(raw, posting, resume);
         if (!result.requirements.length) throw new Error('The model returned no requirements');
@@ -139,6 +148,8 @@ async function run(req, res) {
           res.status(502).json({ error: 'The AI key was rejected. Check OPENROUTER_API_KEY in the Vercel settings.' });
           return;
         }
+        // Only retry the same model without the thinking switch if it rejected the request itself.
+        if (!(noThinking && e.status === 400)) break;
       }
     }
   }
