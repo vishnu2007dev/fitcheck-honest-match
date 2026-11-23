@@ -136,6 +136,7 @@ async function run(req, res) {
   const referer = `https://${req.headers.host || 'fitcheck.vercel.app'}`;
   const started = Date.now();
   const errors = [];
+  console.log('match start', `posting=${posting.length}`, `resume=${resume.length}`);
 
   for (let i = 0; i < order.length; i++) {
     const model = order[i];
@@ -149,6 +150,7 @@ async function run(req, res) {
         const raw = extractJson(content);
         const result = processResult(raw, posting, resume);
         if (!result.requirements.length) throw new Error('The model returned no requirements');
+        console.log('match ok', used, `${Date.now() - started}ms`, `score=${result.score}`, `reqs=${result.requirements.length}`, `rejected=${result.audit.resume_quotes_rejected}`);
         res.status(200).json({ result, meta: { model: used, ms: Date.now() - started } });
         return;
       } catch (e) {
