@@ -110,7 +110,7 @@ function Nav() {
 function Hero() {
   return (
     <section className="hero" id="top">
-      <motion.div {...fade} className="eyebrow"><span className="dot" /> Honest Match Protocol v1.0</motion.div>
+      <motion.div {...fade} className="eyebrow"><span className="dot" /> Honest Match Protocol v1.1</motion.div>
       <motion.h1 {...fade} transition={{ ...fade.transition, delay: 0.05 }}>
         Know how you really fit.<br />Every score shows its <span className="shine">receipts.</span>
       </motion.h1>
